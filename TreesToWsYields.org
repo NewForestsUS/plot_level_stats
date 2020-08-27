@@ -1,0 +1,343 @@
+* Testing TPA Aggregation to WS Yields
+
+First principles:
+
+/Each tree on a plot represents a certain number of trees per acre depending upon the size of the plot as reflected in the TPA value/
+
+#+BEGIN_SRC ipython :session tpa :results output drawer :exports both
+import numpy as np
+import pandas as pd
+from tabulate import tabulate
+
+meanBiomass = 0.5
+totalBiomass = np.random.weibull(2., 15) * meanBiomass 
+tpa = 20
+df = pd.DataFrame(np.stack([totalBiomass, totalBiomass * tpa], axis=1), columns=['Tree Biomass','Area Biomass'])
+df['TPA'] = tpa
+df['StandID'] = 'FOO'
+print(tabulate(df, headers='keys', tablefmt="orgtbl"))
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [3]: 
+# output
+|    | Tree Biomass | Area Biomass | TPA | StandID |
+|----+--------------+--------------+-----+---------|
+|  0 |     0.123528 |      2.47057 |  20 | FOO     |
+|  1 |     0.445191 |      8.90382 |  20 | FOO     |
+|  2 |     0.445642 |      8.91285 |  20 | FOO     |
+|  3 |     0.492619 |      9.85239 |  20 | FOO     |
+|  4 |     0.242512 |      4.85024 |  20 | FOO     |
+|  5 |       0.4645 |         9.29 |  20 | FOO     |
+|  6 |     0.385082 |      7.70165 |  20 | FOO     |
+|  7 |    0.0782004 |      1.56401 |  20 | FOO     |
+|  8 |     0.661697 |      13.2339 |  20 | FOO     |
+|  9 |     0.480666 |      9.61333 |  20 | FOO     |
+| 10 |     0.415394 |      8.30788 |  20 | FOO     |
+| 11 |     0.499878 |      9.99757 |  20 | FOO     |
+| 12 |     0.116148 |      2.32296 |  20 | FOO     |
+| 13 |     0.210229 |      4.20458 |  20 | FOO     |
+| 14 |     0.502549 |       10.051 |  20 | FOO     |
+
+:end:
+
+
+The stand-level stocking is then calculated by summing all area-normalized biomass estimates.
+
+#+BEGIN_SRC ipython :session tpa :results output drawer :exports both
+print(tabulate(df.groupby(['StandID','TPA']).sum(), headers='keys', tablefmt="orgtbl"))
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [8]: 
+# output
+|             | Tree Biomass | Area Biomass |
+|-------------+--------------+--------------|
+| ('FOO', 20) |      5.56384 |      111.277 |
+
+:end:
+
+The area-normalized biomass can also be derived by summing the tree-level biomass and multiplying by the tpa?
+
+#+BEGIN_SRC ipython :session tpa :results output drawer :exports both
+print(df['Tree Biomass'].sum() * tpa)
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [9]: 
+# output
+111.2767570311261
+
+:end:
+
+
+So working now with real data. Here are the top 10 rows from ~elTrees~ table:
+
+#+BEGIN_SRC ipython :session tpa :results output drawer :exports both
+import sqlite3
+con = sqlite3.connect('/Users/pete/Downloads/bundle(7)/result.db')
+
+elTrees = pd.read_sql('select * from elTrees', con)
+elTrees['calc_tpa'] = elTrees.kg_bole_acre/elTrees.kg_dry_bole
+elTrees['mg_bole_acre'] = elTrees.kg_bole_acre / 1000.
+tCol = elTrees[['TPA','kg_dry_bole','kg_bole_acre', 'mg_bole_acre', 'calc_tpa', 'StandID','PtIndex', 'Year']]
+print(tabulate(tCol.head(10), headers='keys', tablefmt="orgtbl"))
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [35]: 
+# output
+|   |     TPA | kg_dry_bole | kg_bole_acre | mg_bole_acre | calc_tpa | StandID     | PtIndex | Year |
+|---+---------+-------------+--------------+--------------+----------+-------------+---------+------|
+| 0 | 1.52333 |     652.237 |      993.572 |     0.993572 |  1.52333 | 07N03E28012 |      13 | 2019 |
+| 1 | 1.51963 |       539.9 |      820.449 |     0.820449 |  1.51963 | 07N03E28012 |      13 | 2019 |
+| 2 | 1.52019 |     361.657 |      549.789 |     0.549789 |  1.52019 | 07N03E28012 |       6 | 2019 |
+| 3 | 1.52028 |     1760.84 |      2676.96 |      2.67696 |  1.52028 | 07N03E28012 |       6 | 2019 |
+| 4 | 1.43276 |     17.1114 |      24.5166 |    0.0245166 |  1.43276 | 07N03E28012 |       8 | 2019 |
+| 5 | 1.49442 |     1945.47 |      2907.33 |      2.90733 |  1.49442 | 07N03E28012 |       8 | 2019 |
+| 6 | 1.52386 |     1411.22 |       2150.5 |       2.1505 |  1.52386 | 07N03E28012 |      12 | 2019 |
+| 7 | 1.48345 |     214.773 |      318.606 |     0.318606 |  1.48345 | 07N03E28012 |      12 | 2019 |
+| 8 |  1.4754 |         306 |      451.472 |     0.451472 |   1.4754 | 07N03E28012 |       5 | 2019 |
+| 9 | 1.48238 |      252.25 |      373.929 |     0.373929 |  1.48238 | 07N03E28012 |       5 | 2019 |
+
+:end:
+
+
+Applying the same logic as above grouping on the plot.
+
+#+BEGIN_SRC ipython :session tpa :results output drawer :exports both
+
+print(tabulate(tCol[['StandID','PtIndex','mg_bole_acre', 'Year']].groupby(['StandID','PtIndex', 'Year']).sum(), headers='keys', tablefmt="orgtbl"))
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [37]: 
+# output
+|                           | mg_bole_acre |
+|---------------------------+--------------|
+| ('07N03E28012', 1, 2019)  |      4.99291 |
+| ('07N03E28012', 1, 2020)  |      5.15579 |
+| ('07N03E28012', 1, 2025)  |      5.99375 |
+| ('07N03E28012', 2, 2019)  |       8.2956 |
+| ('07N03E28012', 2, 2020)  |      8.51883 |
+| ('07N03E28012', 2, 2025)  |      9.58552 |
+| ('07N03E28012', 3, 2019)  |       7.1685 |
+| ('07N03E28012', 3, 2020)  |      7.36265 |
+| ('07N03E28012', 3, 2025)  |       8.3444 |
+| ('07N03E28012', 4, 2019)  |      6.29451 |
+| ('07N03E28012', 4, 2020)  |      6.48223 |
+| ('07N03E28012', 4, 2025)  |      7.41176 |
+| ('07N03E28012', 5, 2019)  |      6.32111 |
+| ('07N03E28012', 5, 2020)  |      6.47928 |
+| ('07N03E28012', 5, 2025)  |      7.35822 |
+| ('07N03E28012', 6, 2019)  |      14.3167 |
+| ('07N03E28012', 6, 2020)  |       14.438 |
+| ('07N03E28012', 6, 2025)  |      15.1809 |
+| ('07N03E28012', 7, 2019)  |      8.96029 |
+| ('07N03E28012', 7, 2020)  |      9.07679 |
+| ('07N03E28012', 7, 2025)  |      9.52437 |
+| ('07N03E28012', 8, 2019)  |      10.8274 |
+| ('07N03E28012', 8, 2020)  |      10.9624 |
+| ('07N03E28012', 8, 2025)  |      11.6647 |
+| ('07N03E28012', 9, 2019)  |      7.84431 |
+| ('07N03E28012', 9, 2020)  |      7.88036 |
+| ('07N03E28012', 9, 2025)  |      8.05919 |
+| ('07N03E28012', 10, 2019) |      7.36449 |
+| ('07N03E28012', 10, 2020) |      7.52423 |
+| ('07N03E28012', 10, 2025) |      8.34543 |
+| ('07N03E28012', 11, 2019) |      4.36579 |
+| ('07N03E28012', 11, 2020) |      4.52776 |
+| ('07N03E28012', 11, 2025) |      5.35752 |
+| ('07N03E28012', 12, 2019) |      6.32427 |
+| ('07N03E28012', 12, 2020) |      6.49996 |
+| ('07N03E28012', 12, 2025) |      7.43068 |
+| ('07N03E28012', 13, 2019) |      7.23403 |
+| ('07N03E28012', 13, 2020) |      7.30705 |
+| ('07N03E28012', 13, 2025) |      7.82317 |
+
+:end:
+
+When grouping at the stand level however, we must sum the tree-level data to plots and then average the normalized values across the plots:
+
+
+#+BEGIN_SRC ipython :session tpa :results output drawer :exports both
+plotSum = tCol[['StandID','PtIndex', 'Year','mg_bole_acre']].groupby(['StandID', 'PtIndex', 'Year']).sum()
+
+print(tabulate(plotSum, headers='keys', tablefmt="orgtbl"))
+#+END_SRC
+
+#+CAPTION: Sum of tree level biomass expanded to acre-normalized values via ~TPA~
+#+RESULTS:
+:results:
+# Out [38]: 
+# output
+|                           | mg_bole_acre |
+|---------------------------+--------------|
+| ('07N03E28012', 1, 2019)  |      4.99291 |
+| ('07N03E28012', 1, 2020)  |      5.15579 |
+| ('07N03E28012', 1, 2025)  |      5.99375 |
+| ('07N03E28012', 2, 2019)  |       8.2956 |
+| ('07N03E28012', 2, 2020)  |      8.51883 |
+| ('07N03E28012', 2, 2025)  |      9.58552 |
+| ('07N03E28012', 3, 2019)  |       7.1685 |
+| ('07N03E28012', 3, 2020)  |      7.36265 |
+| ('07N03E28012', 3, 2025)  |       8.3444 |
+| ('07N03E28012', 4, 2019)  |      6.29451 |
+| ('07N03E28012', 4, 2020)  |      6.48223 |
+| ('07N03E28012', 4, 2025)  |      7.41176 |
+| ('07N03E28012', 5, 2019)  |      6.32111 |
+| ('07N03E28012', 5, 2020)  |      6.47928 |
+| ('07N03E28012', 5, 2025)  |      7.35822 |
+| ('07N03E28012', 6, 2019)  |      14.3167 |
+| ('07N03E28012', 6, 2020)  |       14.438 |
+| ('07N03E28012', 6, 2025)  |      15.1809 |
+| ('07N03E28012', 7, 2019)  |      8.96029 |
+| ('07N03E28012', 7, 2020)  |      9.07679 |
+| ('07N03E28012', 7, 2025)  |      9.52437 |
+| ('07N03E28012', 8, 2019)  |      10.8274 |
+| ('07N03E28012', 8, 2020)  |      10.9624 |
+| ('07N03E28012', 8, 2025)  |      11.6647 |
+| ('07N03E28012', 9, 2019)  |      7.84431 |
+| ('07N03E28012', 9, 2020)  |      7.88036 |
+| ('07N03E28012', 9, 2025)  |      8.05919 |
+| ('07N03E28012', 10, 2019) |      7.36449 |
+| ('07N03E28012', 10, 2020) |      7.52423 |
+| ('07N03E28012', 10, 2025) |      8.34543 |
+| ('07N03E28012', 11, 2019) |      4.36579 |
+| ('07N03E28012', 11, 2020) |      4.52776 |
+| ('07N03E28012', 11, 2025) |      5.35752 |
+| ('07N03E28012', 12, 2019) |      6.32427 |
+| ('07N03E28012', 12, 2020) |      6.49996 |
+| ('07N03E28012', 12, 2025) |      7.43068 |
+| ('07N03E28012', 13, 2019) |      7.23403 |
+| ('07N03E28012', 13, 2020) |      7.30705 |
+| ('07N03E28012', 13, 2025) |      7.82317 |
+
+:end:
+
+#+BEGIN_SRC ipython :session tpa :results output drawer :exports both
+standMean = plotSum.groupby(['StandID', 'Year']).mean()
+print(tabulate(standMean, headers='keys', tablefmt="orgtbl"))
+#+END_SRC
+
+#+CAPTION: Plot-level sum averaged within stands.
+#+RESULTS:
+:results:
+# Out [41]: 
+# output
+|                       | mg_bole_acre |
+|-----------------------+--------------|
+| ('07N03E28012', 2019) |      7.71615 |
+| ('07N03E28012', 2020) |      7.86272 |
+| ('07N03E28012', 2025) |      8.62151 |
+
+:end:
+
+
+We can walk through these calculations to verify that the values reported in the ~ws_yields~ table are being calculated correctly.
+
+#+BEGIN_SRC sqlite :db /Users/pete/Downloads/bundle\(7\)/result.db :colnames yes :exports both
+select standid, 
+       ptindex,
+       year, 
+       sum(kg_bole_acre * 0.5 * 3.667)/1000 --converting to CO2e from biomass.
+from eltrees 
+group by standid, 
+      	 ptindex,
+	 year
+order by ptindex, year;
+
+ #+END_SRC
+
+#+CAPTION: Summing trees to plots
+ #+RESULTS:
+ | StandID     | PtIndex | Year | sum(kg_bole_acre * 0.5 * 3.667)/1000 |
+ |-------------+---------+------+--------------------------------------|
+ | 07N03E28012 |       1 | 2019 |                     9.15450356060586 |
+ | 07N03E28012 |       1 | 2020 |                     9.45314822927562 |
+ | 07N03E28012 |       1 | 2025 |                     10.9895408359912 |
+ | 07N03E28012 |       2 | 2019 |                     15.2099893743701 |
+ | 07N03E28012 |       2 | 2020 |                     15.6192824849933 |
+ | 07N03E28012 |       2 | 2025 |                     17.5750597300246 |
+ | 07N03E28012 |       3 | 2019 |                     13.1434419005513 |
+ | 07N03E28012 |       3 | 2020 |                      13.499426148715 |
+ | 07N03E28012 |       3 | 2025 |                     15.2994569043104 |
+ | 07N03E28012 |       4 | 2019 |                     11.5409929535705 |
+ | 07N03E28012 |       4 | 2020 |                     11.8851757024437 |
+ | 07N03E28012 |       4 | 2025 |                     13.5894695492962 |
+ | 07N03E28012 |       5 | 2019 |                     11.5897639093607 |
+ | 07N03E28012 |       5 | 2020 |                     11.8797604453079 |
+ | 07N03E28012 |       5 | 2025 |                     13.4913004301464 |
+ | 07N03E28012 |       6 | 2019 |                     26.2496206987188 |
+ | 07N03E28012 |       6 | 2020 |                     26.4721001103689 |
+ | 07N03E28012 |       6 | 2025 |                     27.8341924023585 |
+ | 07N03E28012 |       7 | 2019 |                     16.4286968659246 |
+ | 07N03E28012 |       7 | 2020 |                     16.6422961924827 |
+ | 07N03E28012 |       7 | 2025 |                     17.4629371949097 |
+ | 07N03E28012 |       8 | 2019 |                     19.8520495916902 |
+ | 07N03E28012 |       8 | 2020 |                     20.0995496809107 |
+ | 07N03E28012 |       8 | 2025 |                     21.3872564564693 |
+ | 07N03E28012 |       9 | 2019 |                     14.3825487637484 |
+ | 07N03E28012 |       9 | 2020 |                     14.4486456393951 |
+ | 07N03E28012 |       9 | 2025 |                     14.7765334051359 |
+ | 07N03E28012 |      10 | 2019 |                     13.5027975040656 |
+ | 07N03E28012 |      10 | 2020 |                     13.7956775071692 |
+ | 07N03E28012 |      10 | 2025 |                     15.3013516722705 |
+ | 07N03E28012 |      11 | 2019 |                      8.0046682549677 |
+ | 07N03E28012 |      11 | 2020 |                     8.30165667095753 |
+ | 07N03E28012 |      11 | 2025 |                      9.8230105364855 |
+ | 07N03E28012 |      12 | 2019 |                      11.595551740741 |
+ | 07N03E28012 |      12 | 2020 |                      11.917682085353 |
+ | 07N03E28012 |      12 | 2025 |                     13.6241454136455 |
+ | 07N03E28012 |      13 | 2019 |                     13.2635971925038 |
+ | 07N03E28012 |      13 | 2020 |                     13.3974674410913 |
+ | 07N03E28012 |      13 | 2025 |                     14.3437847819605 |
+
+The stand-level average is as follows:
+
+#+BEGIN_SRC sqlite :db /Users/pete/Downloads/bundle\(7\)/result.db :colnames yes :exports both
+with plots as (select standid, 
+       	      	      ptindex,
+		      year, 
+       		      sum(kg_bole_acre*0.5*3.667)/1000 as mg_bole_acre -- converting biomass to CO2e
+	from eltrees 
+	group by standid, 
+	      	 ptindex,
+		 year
+),
+wsy as (select standid, 
+       	       _age as "Year", 
+	       ycinv 
+	from ws_yields 
+	join fvs_cases using(caseid))
+
+select standid,
+       year,
+       avg(mg_bole_acre),
+       ycinv
+from plots 
+join wsy using(standid, year)
+group by standid, 
+      	 year,
+	 ycinv
+ #+END_SRC
+
+
+
+ #+RESULTS:
+ | standid     | year | avg(mg_bole_acre) |            ycinv |
+ |-------------+------+-------------------+------------------|
+ | 07N03E28012 | 2019 |  14.1475555623706 | 14.1475555623706 |
+ | 07N03E28012 | 2020 |  14.4162975644972 | 14.4162975644972 |
+ | 07N03E28012 | 2025 |  15.8075414856157 | 15.8075414856157 |
+
+
+
