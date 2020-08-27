@@ -9,15 +9,15 @@
 Python psuedo-code for calculating plot-level above ground carbon from kg_dry_total from massTree table [required for grid level validation].
 #+END_QUOTE
 
-Using the ~massTree~ table, plot level summary of $MTCO_{2}e$ is the summation of ~kg_dry_total~ across all trees greater than 5" DBH. Below 5" DBH the CARB allometric equations start to behave poorly (negative numbers etc). I would suggest we just calculate volume and biomass for trees $\geq$ 5" dbh. Trees < 5" should be summarized by tree count and basal area.
+Using the ~massTree~ table, plot level summary of MTCO_{2}e is the summation of ~kg_dry_total~ across all trees greater than 5" DBH. Below 5" DBH the CARB allometric equations start to behave poorly (negative numbers etc). I would suggest we just calculate volume and biomass for trees \geq 5" dbh. Trees < 5" should be summarized by tree count and basal area.
 
-$\sum_{i=1}^{n} x_{i} \beta \alpha$
+\sum_{i=1}^{n} x_{i} \beta \alpha
 
 Where:
 
-- $x$ = ~kg_dry_total~ for tree $i$
-- $\beta$ = conversation ratio from biomass to elemental carbon
-- $\alpha$= converstion ratio from elemetal carbon to $CO_{2}$
+- /x/ = ~kg_dry_total~ for tree /if/
+- \beta = conversion ratio from biomass to elemental carbon
+- \alpha= conversion ratio from elemental carbon to CO_{2}
 
 This is done in our system using ~SQL:
 
