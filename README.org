@@ -1,21 +1,20 @@
 * Calculating stats for pixels (plots)
 
 
-** Questions
 
-*** Trees to plots (CO2e)
+** Trees to plots (CO2e) from ~massTree~
 
 #+BEGIN_QUOTE
 Python psuedo-code for calculating plot-level above ground carbon from kg_dry_total from massTree table [required for grid level validation].
 #+END_QUOTE
 
-Using the ~massTree~ table, plot level summary of MTCO_{2}e is the summation of ~kg_dry_total~ across all trees greater than 5" DBH. Below 5" DBH the CARB allometric equations start to behave poorly (negative numbers etc). I would suggest we just calculate volume and biomass for trees \geq 5" dbh. Trees < 5" should be summarized by tree count and basal area.
+Using the ~massTree~ table, plot level summary of MTCO_{2}e is the summation of ~kg_dry_total~ across all trees greater than 5" DBH. Below 5" DBH the CARB allometric equations start to behave poorly (negative numbers etc). I would suggest we just calculate volume and biomass for trees >= 5" dbh. Trees < 5" should be summarized by tree count and basal area.
 
 \sum_{i=1}^{n} x_{i} \beta \alpha
 
 Where:
 
-- /x/ = ~kg_dry_total~ for tree /if/
+- x_{i} = ~kg_dry_total~ for tree /i/
 - \beta = conversion ratio from biomass to elemental carbon
 - \alpha= conversion ratio from elemental carbon to CO_{2}
 
@@ -28,18 +27,40 @@ group by StandID
 where DBH >=5
 #+END_SRC
 
- SQL for total MTCO2e, if you want to know just the trees on the plot.
- select (sum(kg_dry_total) x 0.5 X 3.667)/1000 from massTree group by StandID where DBH >=5
+If you want expanded (per acre) values simply multiply the above by the TPA value. 
 
- SQL if you want to expand to kg dry biomass :
+** Calculating plot stats from imputed tree lists.
 
- select (sum(kg_dry_total x TPA) x 0.5 X 3.667)/1000 from massTree group by StandID where DBH >=5
+#+BEGIN_QUOTE
+A list of any plot (grid) level summary metrics that are required in addition to the FVS outputs that will be generated as a result of this process, and all equations required to calculate them - as defined in section 3.3.6 of the contract.
 
-  2. A list of any plot (grid) level summary metrics that are required in addition to the FVS outputs that will be generated as a result of this process, and all equations required to calculate them - as defined in section 3.3.6 of the contract.
+#+END_QUOTE
 
- Please let me know if this set is going to be onerous to
- Quadriatic Mean Diameter (All trees)
- Tree count by diameter class and species (5" bins) live
- Basal Area by  diameter class and species
- DBH by species : Mean, stddev, variance, coefficient of variation
- Height by species: mean, sttdev, variance, coefficient of variation
+Please let me know if this set is going to be significantly time consuming to implement.
+
+Make a random set of trees
+#+BEGIN_SRC ipython :exports code
+import pandas as pd
+import numpy as np
+from scipy.stats import weibull_min
+import random
+
+n = 100     # number of samples
+k = 4.4     # shape
+lam = (15.5, 25.2)   # scale
+
+dbh = weibull_min.rvs(k, loc=0, scale=lam[0], size=n)
+ht = weibull_min.rvs(k, loc=0, scale=lam[1], size=n)
+
+species = [122,117,15]
+
+spTrees = [random.choice(species) for i in range(n)]
+#+END_SRC
+
++ QMD See Wikipedia for QMD formulation
++ Tree count by diameter class and species (5" bins) live
++ Basal Area by  diameter class and species
++ DBH by species : Mean, stddev, variance, coefficient of variation
++ Height by species: mean, sttdev, variance, coefficient of variation
+
+
