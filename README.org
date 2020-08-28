@@ -8,26 +8,93 @@
 Python psuedo-code for calculating plot-level above ground carbon from kg_dry_total from massTree table [required for grid level validation].
 #+END_QUOTE
 
-Using the ~massTree~ table, plot level summary of MTCO_{2}e is the summation of ~kg_dry_total~ across all trees greater than 5" DBH. Below 5" DBH the CARB allometric equations start to behave poorly (negative numbers etc). I would suggest we just calculate volume and biomass for trees >= 5" dbh. Trees < 5" should be summarized by tree count and basal area.
+Using the ~massTree~ table, plot level summary of MTCO_{2}e is the summation of ~kg_dry_total~ across all trees greater than 5" DBH. Below 5" DBH the CARB   allometric equations start to behave poorly (negative numbers etc). I would suggest we just calculate volume and biomass for trees >= 5" dbh. Trees < 5" should be summarized by tree count and basal area.
 
-\sum_{i=1}^{n} x_{i} \beta \alpha
+\sum_{i=1}^{n} x_{i} TPA \beta \alpha
 
 Where:
 
 - x_{i} = ~kg_dry_total~ for tree /i/
+- /TPA/ is the trees per acre that the given tree represents
 - \beta = conversion ratio from biomass to elemental carbon
 - \alpha= conversion ratio from elemental carbon to CO_{2}
 
-This is done in our system using ~SQL:
+The following steps:
 
-#+BEGIN_SRC sql
-select (sum(kg_dry_total) * 0.5 * 3.667)/1000 -- 
-from massTree 
-group by StandID 
-where DBH >=5
+#+BEGIN_SRC ipython :session :exports code :results output drawer
+import pandas as pd
+import sqlite3
+from tabulate import tabulate
+
+con = sqlite3.connect('/Users/pete/New Forests/US Operations - SCT Timber Carbon Optimization/SharedResources/SCT_DataRoom/sct_data.gpkg')
+
+
 #+END_SRC
 
-If you want expanded (per acre) values simply multiply the above by the TPA value. 
+#+RESULTS:
+:results:
+# Out [28]: 
+:end:
+
+Sleect 100 plots and their associated trees
+#+BEGIN_SRC ipython :session :exports code :results output drawer
+ws_yields = pd.read_sql('select * from ws_yields limit 100', con)
+
+inClause = "('" + "', '".join([i for i in ws_yields['CaseID']]) + "')"
+
+massTree = pd.read_sql('select * from massTree where CaseID in {0};'.format(inClause), con)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [39]: 
+:end:
+
+Select only Trees <5" DBH, and convert total stem biomass to total CO2_e
+
+#+BEGIN_SRC ipython :session :exports code :results output drawer
+elTrees = massTree[massTree['DBH'] >=5 ]
+elTrees['MT_AG_CO2e_calc'] = elTrees['kg_dry_total'] * elTrees['TPA'] * 0.5 * 3.667 / 1000
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [40]: 
+# output
+/Users/pete/.pyenv/versions/3.7.0/lib/python3.7/site-packages/ipykernel_launcher.py:2: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  
+
+:end:
+
+Now we group by ~CaseID~
+
+#+BEGIN_SRC ipython :session :results output drawer
+tStands = elTrees.groupby('CaseID')
+compare = ws_yields.join(tStands.sum(), on='CaseID', rsuffix='std')
+
+print (tabulate(compare[['CaseID','MT_AG_CO2e_calc','yCGrnAG']].head(), headers='keys', tablefmt="orgtbl"))
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [42]: 
+# output
+|   | CaseID                               | MT_AG_CO2e_calc | yCGrnAG |
+|---+--------------------------------------+-----------------+---------|
+| 0 | 7a11d531-b9a2-4d32-b621-fc9b07100e83 |         134.489 | 134.489 |
+| 1 | 44fb3789-58bc-4769-80ee-5192e8e2ebde |         64.6655 | 64.6655 |
+| 2 | ee015115-61b1-4544-9d7a-0a22d8453ddb |         25.8763 | 25.8763 |
+| 3 | 26bec432-3c5e-4144-aaa4-01df5b4cbf49 |         56.9249 | 56.9249 |
+| 4 | 3d48d6c4-2e47-4723-88a0-73e57a4e23b3 |         27.4111 | 27.4111 |
+
+:end:
+
+
 
 ** Calculating plot stats from imputed tree lists.
 
@@ -36,31 +103,31 @@ A list of any plot (grid) level summary metrics that are required in addition to
 
 #+END_QUOTE
 
-Please let me know if this set is going to be significantly time consuming to implement.
+The in addition to the total above-ground live CO2e (above), the following variables from ~massTree~ should be summarized at the plot level:
 
-Make a random set of trees
-#+BEGIN_SRC ipython :exports code
-import pandas as pd
-import numpy as np
-from scipy.stats import weibull_min
-import random
-
-n = 100     # number of samples
-k = 4.4     # shape
-lam = (15.5, 25.2)   # scale
-
-dbh = weibull_min.rvs(k, loc=0, scale=lam[0], size=n)
-ht = weibull_min.rvs(k, loc=0, scale=lam[1], size=n)
-
-species = [122,117,15]
-
-spTrees = [random.choice(species) for i in range(n)]
-#+END_SRC
-
-+ QMD See Wikipedia for QMD formulation
-+ Tree count by diameter class and species (5" bins) live
-+ Basal Area by  diameter class and species
-+ DBH by species : Mean, stddev, variance, coefficient of variation
-+ Height by species: mean, sttdev, variance, coefficient of variation
+| Variable              | Method                        |
+|-----------------------+-------------------------------|
+| ~Ht~                  | ~mean~                        |
+| ~halfLogs~            | ~sum * TPA~                   |
+| ~TPA~                 | ~sum~                         |
+| ~kg_acre~             | ~sum~                         |
+| ~totalMerchBFAC_Ncal~ | ~sum~                         |
+| ~DBH~                 | ~mean~                        |
+| ~S2_BFAC~             | ~sum~                         |
+| ~VOLCFSND~            | ~sum * TPA~                   |
+| ~pctSound~            | ~mean * TPA~                  |
+| ~CVTS~                | ~sum * TPA~                   |
+| ~BdFt~                | ~sum * TPA~                   |
+| ~kg_bole_acre~        | ~sum~                         |
+| ~S3_BFAC~             | ~sum~                         |
+| ~kg_dry_total~        | ~sum~                         |
+| ~wholeLogs~           | ~sum * TPA~                   |
+| ~heightToBreak_ft~    | ~mean~                        |
+| ~vAdj~                | ~mean~                        |
+| ~VOLCFGRS~            | ~sum * TPA~                   |
+| ~S1_BFAC~             | ~sum~                         |
+| ~S4_BFAC~             | ~sum~                         |
+| ~QMD~                 | ~sqrt(BA/(0.005454 * n))~     |
+| ~BA~                  | ~sum((\pi * (DBH/2)**2)/144)~ |
 
 
