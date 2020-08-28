@@ -21,6 +21,8 @@ Where:
 
 The following steps:
 
+Connect to the database
+
 #+BEGIN_SRC ipython :session :exports code :results output drawer
 import pandas as pd
 import sqlite3
@@ -52,24 +54,13 @@ massTree = pd.read_sql('select * from massTree where CaseID in {0};'.format(inCl
 
 Select only Trees <5" DBH, and convert total stem biomass to total CO2_e
 
-#+BEGIN_SRC ipython :session :exports code :results output drawer
+#+BEGIN_SRC ipython :session :exports code :results none
 elTrees = massTree[massTree['DBH'] >=5 ]
 elTrees['MT_AG_CO2e_calc'] = elTrees['kg_dry_total'] * elTrees['TPA'] * 0.5 * 3.667 / 1000
 
 #+END_SRC
 
-#+RESULTS:
-:results:
-# Out [40]: 
-# output
-/Users/pete/.pyenv/versions/3.7.0/lib/python3.7/site-packages/ipykernel_launcher.py:2: SettingWithCopyWarning: 
-A value is trying to be set on a copy of a slice from a DataFrame.
-Try using .loc[row_indexer,col_indexer] = value instead
 
-See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
-  
-
-:end:
 
 Now we group by ~CaseID~
 
@@ -103,7 +94,7 @@ A list of any plot (grid) level summary metrics that are required in addition to
 
 #+END_QUOTE
 
-The in addition to the total above-ground live CO2e (above), the following variables from ~massTree~ should be summarized at the plot level:
+The in addition to the total above-ground live CO2e (above), the following metrics should be summarized at the plot level:
 
 | Variable              | Method                        |
 |-----------------------+-------------------------------|
